@@ -1,13 +1,15 @@
-package state
+package invasion
 import (
 	"github.com/BurntSushi/toml"
 	"errors"
 	"strings"
+	"math/rand"
+	"time"
 )
 
 
 type Server struct {
-	state *CityMap
+	state *WorldMap
 } 
 
 
@@ -62,11 +64,11 @@ func (C *City) Contains(f func(Connection) bool ) bool {
 
 
 	//Isn't thread safe due to only being run at time of construction
-func (CM *CityMap) Validate() *CityMap {
+func (WM *WorldMap) Validate() *WorldMap {
 
 
 	check := func(L string, R string) bool {
-		City := CM.nodes[R]
+		City := WM.cities[R]
 
 		pred := func(C Connection) bool {
 			return C.cityName == L
@@ -80,24 +82,26 @@ func (CM *CityMap) Validate() *CityMap {
 
 	
 	symmetry := func(C City) {
+
+		
 		conns := C.connections
 
 		for _, x := range conns {
 			b := check(C.name, x.cityName)
 
 			direction, e := Opposite(x.direction)
-			Neighbor := CM.nodes[x.cityName]
+			Neighbor := WM.cities[x.cityName]
 		
 			
 			if e != nil {
-				CM.nodes[C.name] = C.rmConn(x.cityName)
+				WM.cities[C.name] = C.RmConn(x.cityName)
 				continue 
 			}
 
 
 			if b == true {continue} else {
 				nconn := Connection{cityName: C.name, direction: direction}
-				CM.nodes[x.cityName] = Neighbor.addConn(nconn)  
+				WM.cities[x.cityName] = Neighbor.AddConn(nconn)  
 			}  
 
 		}
@@ -106,11 +110,11 @@ func (CM *CityMap) Validate() *CityMap {
 	}  
 	
 	
-	for _, v := range CM.nodes {
+	for _, v := range WM.cities {
 		symmetry(v) 
 	}
 
-	return CM
+	return WM
 	
 }
 
@@ -118,7 +122,7 @@ func (CM *CityMap) Validate() *CityMap {
 
 
 
-func DecodeCityMap(fileName string) (*CityMap, error) {
+func DecodeWorldMap(fileName string) (*WorldMap, error) {
 	
 	var cities []City
 	_, e := toml.DecodeFile(fileName, &cities) 
@@ -136,26 +140,45 @@ func DecodeCityMap(fileName string) (*CityMap, error) {
 	aliens := make(map[int]Alien)
 
 	
-	s := &CityMap{nodes: nodes, aliens: aliens}
+	s := &WorldMap{cities: nodes, aliens: aliens}
 
 	s.Validate() 
 
 	return s, e
 	
 	
+}
+
+
+func (WM *WorldMap) RandomCity() string {
+	var cities []string
+	
+	for k, _ := range WM.cities {
+		cities = append(cities, k) 
+	}
+
+
+	rand.Seed(time.Now().Unix())
+	n := rand.Int() %  len(cities)
+	return cities[n]
 }  
 
 
-func (CM *CityMap) initAliens(num int) *CityMap {
+
+func (WM *WorldMap) initAliens(num int) *WorldMap {
 	aliens := make(map[int]Alien)
 	
 	for i := 1; i <= num; i++ {
-		alien := Alien{id: i, moveCtr: 0} 
+		ch := make(chan RMSG)
+		city := WM.RandomCity() 
+
+		alien := Alien{id: i, moveCtr: 0, ch: ch, location: city}
+		
 		aliens[i] = alien
 	}
 
-	CM.aliens = aliens
-	return CM
+	WM.aliens = aliens
+	return WM
 
 }
 

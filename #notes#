@@ -1,0 +1,78 @@
+Change how Aliens are dealt with to something along the lines of this
+Note that in the go implementation msg ! Alien would actually be  Alien.ch <- msg
+
+Honestly typing this out in a more declarative way, constantly reminds me about
+Go's contention pronedness, I wished it had a well supported judy array backed Map, or at least.
+
+
+* int is aliens id
+
+tmsg = {move, int} 
+
+* string in disconnect is alien id
+
+rmsg = {map_change, Alien} | {disconnect, string}  
+
+
+update(World, Alien) =
+
+  
+  P(X) = X.id != Alien.id
+
+  newAliens =
+  
+    Alien.Counter >= 1000 ->
+      filter(world.Aliens, P)
+      disconnect ! Alien
+      
+    _ ->
+      filter(World.aliens, P) union {Alien}
+      {NewState, Alien} ! Alien
+
+  lock(World.mu)
+
+  World1 = World with (aliens = newAliens) 
+
+  unlock(World.mu)
+  World
+
+
+remove(World, Alien) =
+  P(X) = X.id != Alien.id
+  newAliens = filter(World.aliens, P)
+  lock(World.mu)
+
+  World1 = World with (aliens = newAliens) 
+  unlock(World.mu)
+  World 
+
+
+
+StartWar(World, Occupants, CityName) = 
+
+  remove_city(World, CityName) 
+
+  World.mu.lock()
+  defer World.mu.unlock()
+  
+  foreach(alien <- Occupants) {
+    disconnect ! alien
+    remove(World, alien)
+    printf("Aliens %a killed eachother and %c was destroyed", alien, city)  
+  }
+
+  World
+
+
+
+checkInvaders(World, CityName) =
+  P(X) = X.CurrentCity == CityName
+  Occupants = Filter(World.aliens, P)
+  
+  x > 1 ->
+    StartWar(Occupants)
+
+  _ -> {ok, Occupants[0]}
+
+
+
