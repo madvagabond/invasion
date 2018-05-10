@@ -3,7 +3,6 @@
 package invasion
 
 import (
-	"sync/atomic"
 	"math/rand"
 	"time"
 	"fmt"
@@ -33,13 +32,13 @@ type TMSG struct {
 
 type RMSG struct {
 	status string
-	state_change *Alien
+	change *Alien
 } 
 
 
 
 type Connection struct {
-	cityName string
+	city string
 	direction string
 }
 
@@ -48,7 +47,7 @@ type Connection struct {
 
 type Alien struct {
 	id int
-	moveCtr int32
+	moveCtr int
 	
 	location string
 	ch chan RMSG
@@ -112,7 +111,7 @@ func FilterConns(conns []Connection, F func (Connection) bool ) []Connection {
 
 func (C *City) RmConn(city_name string) City {
 	fn := func(C Connection) bool {
-		return C.cityName != city_name
+		return C.city != city_name
 	}
 
 	
@@ -127,7 +126,7 @@ func (C *City) RmConn(city_name string) City {
 
 func (C *City) RandomConn() Connection  {
 	rand.Seed(time.Now().Unix())
-	n := rand.Int() %  len(C.connections)
+	n := rand.Intn(len(C.connections))
 	return C.connections[n]
 	
 }
@@ -172,7 +171,7 @@ func (WM *WorldMap) DestroyCity(cityName string) *WorldMap {
 	}
 	
 	for _, x := range conns {
-		WM.UpdateCity(x.cityName, fn)
+		WM.UpdateCity(x.city, fn)
 	}
 
 	WM.mu.Lock()
@@ -205,23 +204,52 @@ func FilterAliens(aliens map[int]Alien, F func(Alien) bool ) []Alien {
 
 
 
+
+func (WM *WorldMap) RemoveRivals(rivals []Alien, city_name string) {
+	
+
+
+	var ids []int 
+
+
+	for _, x := range rivals {
+		id := x.id
+		ids = append(ids, id)
+	} 
+
+	
+	for _, x := range rivals {
+		WM.RemoveAlien(x)
+	} 
+
+
+	
+	WM.DestroyCity(city_name)
+
+	fmt.Printf("Aliens %v died in battle, and city %s was destroy", ids, city_name)
+}  
+
+
 func (WM *WorldMap) RemoveAlien(alien Alien) {
 
 	WM.mu.Lock()
 	delete(WM.aliens, alien.id)
 	WM.mu.Unlock()
 
-	alien.ch <- RMSG{disconnect, nil} 
+	alien.ch <- RMSG{disconnect, nil}
+	
 }
 
 
 
 
-func (WM *WorldMap) Move (alien Alien) {
-	
-	ctr := alien.moveCtr
-	atomic.AddInt32(&ctr, 1)
 
+
+func (WM *WorldMap) Move (alien Alien) {
+
+	
+	alien.moveCtr = alien.moveCtr + 1
+	
 	if alien.moveCtr >= 1000 {
 
 		WM.RemoveAlien(alien)
@@ -235,36 +263,32 @@ func (WM *WorldMap) Move (alien Alien) {
 
 	WM.mu.RLock() 
 	current_city := WM.cities[city_name]
-	WM.mu.RUnlock() 
+	WM.mu.RUnlock()
 
-	new_cname := current_city.RandomConn().cityName
+	new_cname := current_city.RandomConn().city
+	alien.location = new_cname
+	
+	
+
+
+
 	pred := func (a Alien) bool {return a.location == new_cname}
-
 	rivals := FilterAliens(WM.aliens, pred)
 
+
+	
 	if len(rivals) > 1 {
-
-		var ids []int 
-
-
-		for _, x := range rivals {
-			id := x.id
-			ids = append(ids, id)
-		} 
-
-		
-		for _, x := range rivals {
-			WM.RemoveAlien(x)
-		} 
-
-
-		
-		WM.DestroyCity(city_name)
-
-		fmt.Printf("Aliens %v died in battle, and city %s was destroy", ids, city_name)
-
+		WM.RemoveRivals(rivals, city_name) 
 		return 
-	}
+	} else {
+		
+		WM.mu.Lock()
+		WM.aliens[alien.id] = alien
+		WM.mu.Unlock()
+
+		alien.ch <- RMSG{map_change, &alien}
+
+	} 
 
 	
 }  

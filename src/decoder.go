@@ -1,16 +1,14 @@
 package invasion
+
 import (
-	"github.com/BurntSushi/toml"
 	"errors"
 	"strings"
 	"math/rand"
+	"io/ioutil"
 	"time"
+
 )
 
-
-type Server struct {
-	state *WorldMap
-} 
 
 
 func Opposite(direction string) (string, error)  {
@@ -36,6 +34,7 @@ func Opposite(direction string) (string, error)  {
 
 
 }
+
 
 
 func (C *City) Contains(f func(Connection) bool ) bool {
@@ -71,7 +70,7 @@ func (WM *WorldMap) Validate() *WorldMap {
 		City := WM.cities[R]
 
 		pred := func(C Connection) bool {
-			return C.cityName == L
+			return C.city == L
 		}
 
 		return City.Contains(pred)		
@@ -87,21 +86,21 @@ func (WM *WorldMap) Validate() *WorldMap {
 		conns := C.connections
 
 		for _, x := range conns {
-			b := check(C.name, x.cityName)
+			b := check(C.name, x.city)
 
 			direction, e := Opposite(x.direction)
-			Neighbor := WM.cities[x.cityName]
+			Neighbor := WM.cities[x.city]
 		
 			
 			if e != nil {
-				WM.cities[C.name] = C.RmConn(x.cityName)
+				WM.cities[C.name] = C.RmConn(x.city)
 				continue 
 			}
 
 
 			if b == true {continue} else {
-				nconn := Connection{cityName: C.name, direction: direction}
-				WM.cities[x.cityName] = Neighbor.AddConn(nconn)  
+				nconn := Connection{city: C.name, direction: direction}
+				WM.cities[x.city] = Neighbor.AddConn(nconn)  
 			}  
 
 		}
@@ -120,12 +119,58 @@ func (WM *WorldMap) Validate() *WorldMap {
 
 
 
+func ParseCity(text string) City  {
+	tokens := strings.Split(text, " ")
+
+	parseConnection := func (s string) Connection {
+		items := strings.Split(s, "=")
+		return Connection{direction: items[0], city: items[1]}
+	}  
+	
+	name := tokens[0]
+	rest := tokens[1:]
+
+	var conns []Connection
+	
+	for _, x := range rest {
+		conn := parseConnection(x)
+		conns = append(conns, conn)
+	}
+
+
+	return City{name: name, connections: conns}
+}
+
+
+
+
+func ParseCities(file string) ([]City, error) {
+	dat, err := ioutil.ReadFile(file)
+
+	if err != nil {
+		return nil, err
+	}
+
+	text := string(dat)
+	lines := strings.Split(text, "\n")
+
+	var cities []City
+
+	for _, x := range lines {
+		city := ParseCity(x)
+		cities = append(cities, city) 
+	}
+
+	return cities, nil
+
+}  
+
+
 
 
 func DecodeWorldMap(fileName string) (*WorldMap, error) {
 	
-	var cities []City
-	_, e := toml.DecodeFile(fileName, &cities) 
+	cities, e := ParseCities(fileName)  
 
 	if e != nil {
 		return nil, e
@@ -159,24 +204,40 @@ func (WM *WorldMap) RandomCity() string {
 
 
 	rand.Seed(time.Now().Unix())
-	n := rand.Int() %  len(cities)
+	n := rand.Intn( len(cities) )
 	return cities[n]
 }  
 
 
 
-func (WM *WorldMap) initAliens(num int) *WorldMap {
+
+
+
+func (WM *WorldMap) InitAliens(num int) *WorldMap {
+	
 	aliens := make(map[int]Alien)
 	
 	for i := 1; i <= num; i++ {
 		ch := make(chan RMSG)
 		city := WM.RandomCity() 
 
-		alien := Alien{id: i, moveCtr: 0, ch: ch, location: city}
+		alien := Alien{id: i, moveCtr: 1, ch: ch, location: city}
 		
 		aliens[i] = alien
 	}
 
+
+	for k, _ := range WM.cities {
+		p := func(a Alien) bool {return a.location == k}
+		rivals := FilterAliens(WM.aliens, p) 
+
+		if len(rivals) > 1 {
+			WM.RemoveRivals(rivals, k)
+		}
+		
+	}  
+
+	
 	WM.aliens = aliens
 	return WM
 
