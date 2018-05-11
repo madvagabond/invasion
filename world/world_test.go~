@@ -1,5 +1,5 @@
 //not in the mode to use test tables
-package invasion
+package world
 
 import (
 	"testing"

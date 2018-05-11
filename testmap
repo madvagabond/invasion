@@ -1,0 +1,9 @@
+Foo north=Bar west=Baz south=Qu-ux
+Bar south=Foo west=Bee
+Baz east=Foo west=Mascouca north=Saspoburg
+Mascouca east=Baz south=Saspoburg
+Saspoburg south=Baz
+Wostrus north=Foo east=Ruplor
+Ruplor west=Wostrus south=Flaequa
+Flaequa north=Flaequa west=Bluinia
+Bluinia east=Flaequa

@@ -1,10 +1,11 @@
-package invasion
+package world
 
 import (
 	"errors"
 	"strings"
 	"math/rand"
 	"io/ioutil"
+	"fmt"
 	"time"
 
 )
@@ -34,6 +35,8 @@ func Opposite(direction string) (string, error)  {
 
 
 }
+
+
 
 
 
@@ -67,7 +70,7 @@ func (WM *WorldMap) Validate() *WorldMap {
 
 
 	check := func(L string, R string) bool {
-		City := WM.cities[R]
+		City, _ := WM.cities.Get(R)
 
 		pred := func(C Connection) bool {
 			return C.city == L
@@ -89,18 +92,18 @@ func (WM *WorldMap) Validate() *WorldMap {
 			b := check(C.name, x.city)
 
 			direction, e := Opposite(x.direction)
-			Neighbor := WM.cities[x.city]
+			Neighbor, _ := WM.cities.Get(x.city)
 		
 			
 			if e != nil {
-				WM.cities[C.name] = C.RmConn(x.city)
+				WM.cities.Map[C.name] = C.RmConn(x.city)
 				continue 
 			}
 
 
 			if b == true {continue} else {
 				nconn := Connection{city: C.name, direction: direction}
-				WM.cities[x.city] = Neighbor.AddConn(nconn)  
+				WM.cities.Put(x.city, Neighbor.AddConn(nconn))
 			}  
 
 		}
@@ -109,7 +112,7 @@ func (WM *WorldMap) Validate() *WorldMap {
 	}  
 	
 	
-	for _, v := range WM.cities {
+	for _, v := range WM.cities.Copy() {
 		symmetry(v) 
 	}
 
@@ -168,7 +171,7 @@ func ParseCities(file string) ([]City, error) {
 
 
 
-func DecodeWorldMap(fileName string) (*WorldMap, error) {
+func DecodeMap(fileName string) (*WorldMap, error) {
 	
 	cities, e := ParseCities(fileName)  
 
@@ -176,16 +179,14 @@ func DecodeWorldMap(fileName string) (*WorldMap, error) {
 		return nil, e
 	}
 
-	nodes := make(map[string]City)
+	nodes := InitCityMap() 
 	
 	for _, x := range cities {
-		nodes[x.name] = x
+		nodes.Put(x.name, x)
 	}
 
-	aliens := make(map[int]Alien)
-
-	
-	s := &WorldMap{cities: nodes, aliens: aliens}
+	aliens := InitAlienMap()
+	s := &WorldMap{nodes,aliens}
 
 	s.Validate() 
 
@@ -197,8 +198,9 @@ func DecodeWorldMap(fileName string) (*WorldMap, error) {
 
 func (WM *WorldMap) RandomCity() string {
 	var cities []string
+	mapCopy := WM.cities.Copy()
 	
-	for k, _ := range WM.cities {
+	for k, _ := range mapCopy {
 		cities = append(cities, k) 
 	}
 
@@ -215,34 +217,36 @@ func (WM *WorldMap) RandomCity() string {
 
 func (WM *WorldMap) InitAliens(num int) *WorldMap {
 	
-	aliens := make(map[int]Alien)
-	
 	for i := 1; i <= num; i++ {
 		ch := make(chan RMSG)
 		city := WM.RandomCity() 
 
-		alien := Alien{id: i, moveCtr: 1, ch: ch, location: city}
+		alien := Alien{id: i, ctr: 1, ch: ch, location: city}
 		
-		aliens[i] = alien
+		WM.aliens.Put(i, alien)
 	}
 
 
-	for k, _ := range WM.cities {
-		p := func(a Alien) bool {return a.location == k}
-		rivals := FilterAliens(WM.aliens, p) 
+	cityCopy := WM.cities.Copy()
 
-		if len(rivals) > 1 {
-			WM.RemoveRivals(rivals, k)
+	for k, _ := range cityCopy {
+		p := func(a Alien) bool {return a.location == k}
+		rivals := FilterAliens(WM.aliens.Copy(), p)
+
+		if len(rivals) < 2 {
+			continue 
 		}
+		
+		for _, x := range rivals {
+			fmt.Printf("Alien %d died in battle \n", x.id) 
+			close(x.ch)
+			WM.aliens.Delete(x.id) 
+		}
+
+		WM.cities.Delete(k) 
 		
 	}  
 
-	
-	WM.aliens = aliens
 	return WM
 
 }
-
-
-
-

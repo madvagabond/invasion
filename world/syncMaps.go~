@@ -1,0 +1,56 @@
+package world
+import "sync"
+
+struct CityMap {
+	Map map[string]City
+	Mu sync.RWMutex
+}
+
+struct AlienMap {
+	Map map[int]Alien
+	Mu sync.RWMutex
+}
+
+func (CM *CityMap) Get(key string) (City, bool) {
+	CM.Mu.RLock()
+	defer CM.Mu.RUnlock()
+	
+	return CM.Map[key]
+}
+
+
+func (CM *CityMap) Delete(key string) {
+	CM.Mu.Lock()
+	defer CM.Mu.Unlock()
+	delete(CM.Map, key)
+
+}
+
+func (CM *CityMap) Put(key string, value City) {
+	CM.mu.Lock()
+	defer CM.Mu.Unlock()
+	CM[key] = city 
+}
+
+
+func (CM *CityMap) Get(key int) {
+	CM.Mu.RLock()
+	defer CM.Mu.RUnlock()
+	
+	CM.Map[key]
+}
+
+
+func (CM *CityMap) Delete(key int) {
+	CM.Mu.Lock()
+	defer CM.Mu.Unlock()
+	delete(CM.Map, key)
+
+}
+
+func (CM *CityMap) Put(key int, value City) {
+	CM.mu.Lock()
+	defer CM.Mu.Unlock()
+	CM[key] = city 
+}
+
